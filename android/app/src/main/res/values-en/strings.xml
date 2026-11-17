@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_compact_label">Compact player</string>
+    <string name="widget_card_label">Playback card</string>
+    <string name="widget_quick_label">Quick actions</string>
+    <string name="widget_compact_description">Compact player with cover art and quick controls</string>
+    <string name="widget_card_description">Playback card with large cover art and controls</string>
+    <string name="widget_quick_actions_description">Quick access to resume, favourites, library and connect</string>
+    <string name="widget_nada">Nothing playing</string>
+    <string name="widget_toca_reproducir">Tap to play</string>
+    <string name="widget_te_espera">Your library is waiting</string>
+    <string name="widget_toca_abrir">Tap to open your music</string>
+    <string name="accion_reanudar">Resume music</string>
+    <string name="accion_favoritas">Go to favourite songs</string>
+    <string name="accion_biblioteca">Go to library</string>
+    <string name="accion_conectar">Connect to PC</string>
+    <string name="accion_play_pausa">Play or pause</string>
+    <string name="accion_siguiente">Next track</string>
+    <string name="accion_anterior">Previous track</string>
+    <string name="desconocido">Unknown</string>
+</resources>

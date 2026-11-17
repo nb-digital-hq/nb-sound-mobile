@@ -1,0 +1,25 @@
+# Actualizaciones de dependencias.
+#
+# Dependabot no abre pull requests (limite 0): las alertas de seguridad siguen
+# activas y las actualizaciones se hacen a mano, verificadas en local con la
+# suite completa. Ver docs/audit/supply-chain.md
+version: 2
+
+updates:
+  - package-ecosystem: pub
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+
+  - package-ecosystem: gradle
+    directory: /android
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 0

@@ -1,0 +1,250 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../../core/di/providers.dart';
+import '../../../../core/utils/duration_format.dart';
+import '../../../../data/db/database.dart';
+import '../../../../shared/theme/nb_colors.dart';
+import '../../../../shared/theme/nb_theme.dart';
+import '../../../../shared/util/responsive.dart';
+import '../../../../shared/widgets/app_icons.dart';
+import '../../../../shared/widgets/sub_header.dart';
+import '../../../offline/application/download_providers.dart';
+import '../../../offline/presentation/download_actions.dart';
+import '../../../player/application/playback.dart';
+import '../../application/library_providers.dart';
+import '../widgets/collection_actions.dart';
+import '../widgets/pista_list.dart';
+import '../widgets/playlist_art.dart';
+import '../../../../core/i18n/i18n.dart';
+
+/// Detalle de playlist: mosaico, metadatos y pistas en orden.
+class PlaylistDetailScreen extends ConsumerWidget {
+  const PlaylistDetailScreen({super.key, required this.playlistId});
+
+  final int playlistId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final NbColors c = context.nb;
+    final Playlist? playlist = ref.watch(playlistProvider(playlistId)).value;
+    final List<Pista> pistas =
+        ref.watch(pistasDePlaylistProvider(playlistId)).value ??
+        const <Pista>[];
+    final double total = pistas.fold<double>(
+      0,
+      (double a, Pista p) => a + p.duracionSeg,
+    );
+
+    return Scaffold(
+      backgroundColor: c.bg,
+      body: SafeArea(
+        child: MaxWidth(
+          child: CustomScrollView(
+            slivers: <Widget>[
+              SliverToBoxAdapter(
+                child: Column(
+                  children: <Widget>[
+                    SubHeader(
+                      title: playlist?.nombre ?? tr('Playlist'),
+                      trailing: IconButton(
+                        tooltip: tr('Más opciones'),
+                        icon: Icon(AppIcons.moreV, color: c.text2),
+                        onPressed: pistas.isEmpty
+                            ? null
+                            : () => mostrarMenuColeccion(context, ref, pistas),
+                      ),
+                    ),
+                    Center(
+                      child: PlaylistArt(
+                        pistas: pistas,
+                        size: 200,
+                        radius: 18,
+                        seed: playlistId,
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 22),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Text(
+                            playlist?.nombre ?? '',
+                            style: TextStyle(
+                              fontFamily: NbFonts.display,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                              color: c.text,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            tr('{length} pistas  ·  {p1}', {
+                              'length': pistas.length,
+                              'p1': formatLongDuration(total),
+                            }),
+                            style: TextStyle(
+                              fontFamily: NbFonts.ui,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                              color: c.text2,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: <Widget>[
+                              FilledButton.icon(
+                                onPressed: pistas.isEmpty
+                                    ? null
+                                    : () => ref
+                                          .read(playbackActionsProvider)
+                                          .reproducirColeccion(pistas, 0),
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: c.accent,
+                                  foregroundColor: c.ink,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 28,
+                                    vertical: 12,
+                                  ),
+                                  shape: const StadiumBorder(),
+                                ),
+                                icon: Icon(
+                                  AppIcons.play,
+                                  color: c.ink,
+                                  size: 22,
+                                ),
+                                label: Text(
+                                  tr('Reproducir'),
+                                  style: TextStyle(
+                                    fontFamily: NbFonts.ui,
+                                    fontWeight: FontWeight.w700,
+                                    color: c.ink,
+                                  ),
+                                ),
+                              ),
+                              ShuffleCollectionButton(pistas: pistas),
+                              _GuardarPlaylistButton(
+                                playlistId: playlistId,
+                                pistas: pistas,
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                ),
+              ),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
+                sliver: PistaSliverList(
+                  pistas: pistas,
+                  numbered: true,
+                  showCover: false,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Guardar/seguir una playlist del PC: pasa a "Tus playlists", se mantiene al día
+/// por el sync y descarga todo su contenido para vivir offline. Botón **solo
+/// ícono** que cambia según estado (como en álbumes): descargar → guardar+bajar;
+/// descargando/descargada → tocar para dejar de seguir.
+class _GuardarPlaylistButton extends ConsumerWidget {
+  const _GuardarPlaylistButton({
+    required this.playlistId,
+    required this.pistas,
+  });
+
+  final int playlistId;
+  final List<Pista> pistas;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final NbColors c = context.nb;
+    final bool guardada = ref.watch(playlistGuardadaProvider(playlistId));
+
+    if (guardada) {
+      final Set<int> completas = ref.watch(pistasCompletasProvider);
+      final int total = pistas.length;
+      final int hechas = pistas
+          .where((Pista p) => completas.contains(p.id))
+          .length;
+      final bool descargando = total > 0 && hechas < total;
+      return IconButton(
+        tooltip: descargando
+            ? tr('Guardada · {hechas}/{total} · dejar de seguir', {
+                'hechas': hechas,
+                'total': total,
+              })
+            : tr('Guardada · dejar de seguir'),
+        onPressed: () => _confirmarDejarDeSeguir(context, ref),
+        icon: Icon(
+          descargando ? AppIcons.downloading : AppIcons.downloadDone,
+          size: 24,
+          color: c.accent,
+        ),
+      );
+    }
+
+    return IconButton(
+      tooltip: tr('Guardar y descargar'),
+      onPressed: pistas.isEmpty
+          ? null
+          : () => encolarConAviso(context, ref, () async {
+              await ref.read(followedPlaylistsDaoProvider).guardar(playlistId);
+              await ref
+                  .read(downloadQueueProvider.notifier)
+                  .encolarPlaylist(playlistId);
+            }, exito: tr('Guardada en Tus playlists · descargando')),
+      icon: Icon(AppIcons.download, size: 24, color: c.text2),
+    );
+  }
+
+  Future<void> _confirmarDejarDeSeguir(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    final NbColors c = context.nb;
+    final bool? ok = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dctx) => AlertDialog(
+        backgroundColor: c.bg2,
+        title: Text(
+          tr('Dejar de seguir'),
+          style: TextStyle(color: c.text, fontFamily: NbFonts.display),
+        ),
+        content: Text(
+          tr(
+            'Saldrá de "Tus playlists". Las descargas ya hechas se conservan (gestiónalas en Descargas).',
+          ),
+          style: TextStyle(color: c.text2, fontFamily: NbFonts.ui),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dctx).pop(false),
+            child: Text(tr('Cancelar'), style: TextStyle(color: c.text2)),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dctx).pop(true),
+            style: FilledButton.styleFrom(backgroundColor: c.accent),
+            child: Text(tr('Dejar de seguir'), style: TextStyle(color: c.ink)),
+          ),
+        ],
+      ),
+    );
+    if (ok ?? false) {
+      await ref.read(followedPlaylistsDaoProvider).dejarDeSeguir(playlistId);
+    }
+  }
+}

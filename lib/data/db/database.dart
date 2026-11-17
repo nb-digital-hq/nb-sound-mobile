@@ -1,0 +1,110 @@
+import 'dart:io';
+
+import 'package:drift/drift.dart';
+import 'package:drift/native.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+
+import 'daos/assets_dao.dart';
+import 'daos/catalog_dao.dart';
+import 'daos/downloads_dao.dart';
+import 'daos/favorites_dao.dart';
+import 'daos/followed_playlists_dao.dart';
+import 'daos/history_dao.dart';
+import 'daos/local_media_dao.dart';
+import 'daos/local_playlists_dao.dart';
+import 'daos/sync_state_dao.dart';
+import 'tables.dart';
+
+part 'database.g.dart';
+
+/// Base de datos local (Drift/SQLite). Réplica de catálogo + fuente de verdad
+/// del historial/favoritos del móvil. Ver docs/architecture/storage.md.
+@DriftDatabase(
+  tables: <Type>[
+    Artistas,
+    Albums,
+    Pistas,
+    Playlists,
+    PlaylistPistas,
+    PlaylistsLocales,
+    PlaylistLocalPistas,
+    PlaylistsGuardadas,
+    HistorialLocal,
+    FavoritosLocal,
+    DescargasAudio,
+    AssetsDescargados,
+    LocalMediaOcultas,
+    SyncEstado,
+    PcEmparejado,
+  ],
+  daos: <Type>[
+    CatalogDao,
+    HistoryDao,
+    FavoritesDao,
+    DownloadsDao,
+    AssetsDao,
+    SyncStateDao,
+    LocalPlaylistsDao,
+    FollowedPlaylistsDao,
+    LocalMediaDao,
+  ],
+)
+class AppDatabase extends _$AppDatabase {
+  AppDatabase([QueryExecutor? executor]) : super(executor ?? _open());
+
+  /// Constructor para tests con BD en memoria.
+  AppDatabase.forTesting(super.executor);
+
+  @override
+  int get schemaVersion => 7;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+    onCreate: (Migrator m) => m.createAll(),
+    onUpgrade: (Migrator m, int from, int to) async {
+      // v2: playlists locales del teléfono (editables, fuera del sync).
+      if (from < 2) {
+        await m.createTable(playlistsLocales);
+        await m.createTable(playlistLocalPistas);
+      }
+      // v3: descarga offline completa (letra + karaoke por pista + imágenes).
+      if (from < 3) {
+        await m.addColumn(descargasAudio, descargasAudio.lyricsEstado);
+        await m.addColumn(descargasAudio, descargasAudio.stemsEstado);
+        await m.addColumn(descargasAudio, descargasAudio.stemsBytes);
+        await m.addColumn(descargasAudio, descargasAudio.stemsTotalBytes);
+        await m.createTable(assetsDescargados);
+      }
+      // v4: playlists del PC guardadas/seguidas (estado propio del móvil).
+      if (from < 4) {
+        await m.createTable(playlistsGuardadas);
+      }
+      // v5: descripción opcional de las playlists locales. Si la tabla se acaba
+      // de crear en el paso v2 ya trae la columna: añadirla otra vez abortaría
+      // la migración de quien viene de la versión 1.
+      if (from >= 2 && from < 5) {
+        await m.addColumn(playlistsLocales, playlistsLocales.descripcion);
+      }
+      // v6: origen del catálogo (pc | local) para integrar la música local
+      // del teléfono en las mismas tablas sin pisar el espejo del PC.
+      if (from < 6) {
+        await m.addColumn(pistas, pistas.origen);
+        await m.addColumn(albums, albums.origen);
+        await m.addColumn(artistas, artistas.origen);
+      }
+      // v7: pistas de música local ocultadas por el usuario (no se re-indexan).
+      if (from < 7) {
+        await m.createTable(localMediaOcultas);
+      }
+    },
+  );
+
+  static QueryExecutor _open() {
+    return LazyDatabase(() async {
+      final Directory dir = await getApplicationDocumentsDirectory();
+      final File file = File(p.join(dir.path, 'nb_sound.sqlite'));
+      return NativeDatabase.createInBackground(file);
+    });
+  }
+}

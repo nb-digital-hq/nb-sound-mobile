@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_compact_label">Player compacto</string>
+    <string name="widget_card_label">Cartão de reprodução</string>
+    <string name="widget_quick_label">Atalhos rápidos</string>
+    <string name="widget_compact_description">Player compacto com capa e controles rápidos</string>
+    <string name="widget_card_description">Cartão de reprodução com capa grande e controles</string>
+    <string name="widget_quick_actions_description">Atalhos para retomar, favoritas, biblioteca e conectar</string>
+    <string name="widget_nada">Nada tocando</string>
+    <string name="widget_toca_reproducir">Toque para tocar</string>
+    <string name="widget_te_espera">Sua biblioteca espera por você</string>
+    <string name="widget_toca_abrir">Toque para abrir a música</string>
+    <string name="accion_reanudar">Retomar música</string>
+    <string name="accion_favoritas">Ir para as músicas favoritas</string>
+    <string name="accion_biblioteca">Ir para a biblioteca</string>
+    <string name="accion_conectar">Conectar ao PC</string>
+    <string name="accion_play_pausa">Tocar ou pausar</string>
+    <string name="accion_siguiente">Próxima faixa</string>
+    <string name="accion_anterior">Faixa anterior</string>
+    <string name="desconocido">Desconhecido</string>
+</resources>

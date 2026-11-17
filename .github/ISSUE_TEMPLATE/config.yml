@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/nb-digital-hq/nb-sound-mobile/security/advisories/new
+    about: "Do not open a public issue. Use private vulnerability reporting, or email nbdigitalsas@gmail.com with the subject prefix [NB Sound Mobile][Seguridad]."
+  - name: Read the documentation
+    url: https://github.com/nb-digital-hq/nb-sound-mobile/tree/main/docs
+    about: The documentation is the single source of truth of the project.

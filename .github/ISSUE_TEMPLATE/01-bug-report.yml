@@ -1,0 +1,49 @@
+name: Bug report
+description: Something does not work as it should
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        If this is a security vulnerability, **do not report it here**. Follow [SECURITY.md](../blob/main/SECURITY.md).
+        Do not attach screenshots that show your music library or your PC address if you prefer to keep them private.
+  - type: textarea
+    id: observed
+    attributes:
+      label: What happens
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What should happen
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Pair with the PC
+        2. Open ...
+        3. Observe that ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: NB Sound Mobile version
+      description: Shown in General, About.
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device and system
+      placeholder: "Pixel 8, Android 16 / iPhone 15, iOS 18"
+    validations:
+      required: true
+  - type: input
+    id: pc
+    attributes:
+      label: NB Sound version on the PC (if relevant)

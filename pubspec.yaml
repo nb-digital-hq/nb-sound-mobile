@@ -1,0 +1,97 @@
+name: nb_sound_mobile
+description: "App móvil del ecosistema NB Sound (Android, iOS y tablets)."
+publish_to: "none"
+version: 1.0.0+6
+
+environment:
+  sdk: ">=3.8.0 <4.0.0"
+  flutter: ">=3.29.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # Textos propios de los widgets de Material (diálogos, accesibilidad) en el
+  # idioma de la app. Viene con el SDK de Flutter.
+  flutter_localizations:
+    sdk: flutter
+
+  # --- Estado / DI ---
+  flutter_riverpod: ^3.3.1
+  riverpod_annotation: ^4.0.2
+
+  # --- Navegación ---
+  go_router: ^17.3.0
+
+  # --- Base de datos local (SQLite type-safe) ---
+  drift: ^2.33.0
+  sqlite3_flutter_libs: ^0.6.0
+  path_provider: ^2.1.5
+  path: ^1.9.0
+
+  # --- Audio (reproducción + background) ---
+  just_audio: ^0.10.5
+  audio_service: ^0.18.18
+  audio_session: ^0.1.25
+
+  # --- Imágenes: caché en disco/memoria + redimensionado de portadas remotas ---
+  cached_network_image: ^3.4.1
+  # Caché en disco configurable (vida larga + muchos objetos) para que las
+  # portadas no se re-descarguen al volver a entrar a una vista.
+  flutter_cache_manager: ^3.4.1
+
+  # --- Red: sync (HTTP) + control remoto (WebSocket) ---
+  dio: ^5.9.2
+  web_socket_channel: ^3.0.3
+
+  # --- Descubrimiento / emparejamiento ---
+  nsd: ^5.0.1                   # mDNS / DNS-SD (descubrir el PC)
+  flutter_secure_storage: ^10.3.1  # device_token + tls_fingerprint (TOFU)
+
+  # --- Utilidades ---
+  freezed_annotation: ^3.1.0
+  json_annotation: ^4.12.0
+  collection: ^1.18.0
+  crypto: ^3.0.3               # validar hash_sha256 del audio descargado
+  device_info_plus: ^13.1.0
+  image_picker: ^1.1.2         # elegir foto de perfil desde la galería
+  permission_handler: ^12.0.3  # permiso de audio (música local del teléfono)
+  flutter_zxing: ^3.1.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+  # --- Codegen ---
+  build_runner: ^2.15.0
+  riverpod_generator: ^4.0.3
+  drift_dev: ^2.33.0
+  freezed: ^3.2.5
+  json_serializable: ^6.14.0
+
+flutter:
+  uses-material-design: true
+
+  # Previsualizaciones del selector "Ícono de la app": el logo por defecto y sus
+  # variantes por tema (generadas por tool/gen_app_icons.py desde
+  # assets/images/logo.svg). El ícono real del lanzador lo conmutan los
+  # activity-alias de Android; estos PNG solo se usan para la rejilla del selector.
+  assets:
+    - assets/app_icons/
+
+  # Sin media de catálogo empaquetada: audio y portadas llegan del PC. La
+  # demostración (NB_SEED) genera la suya en el dispositivo. El logo
+  # (assets/images) es la fuente del ícono y no se empaqueta.
+
+  # Fuentes variables (eje wght). Flutter mapea fontWeight al eje automáticamente.
+  fonts:
+    - family: SpaceGrotesk
+      fonts:
+        - asset: assets/fonts/SpaceGrotesk.ttf
+    - family: Manrope
+      fonts:
+        - asset: assets/fonts/Manrope.ttf
+
+# Ícono de la app: todo (lanzador por defecto, adaptativo, variantes por tema,
+# previsualizaciones e iOS) se genera desde un único SVG, assets/images/logo.svg.
+# Cambiar el logo = reemplazar ese SVG y ejecutar: python3 tool/gen_app_icons.py

@@ -1,0 +1,57 @@
+# Flutter / Dart
+.dart_tool/
+.packages
+build/
+.flutter-plugins
+.flutter-plugins-dependencies
+# pubspec.lock: esto es una APP (publish_to: none), no una librería → SE VERSIONA
+# para obtener builds reproducibles. (Solo las librerías deben ignorarlo.)
+
+# Generado por codegen (se regenera con: dart run build_runner build)
+*.g.dart
+*.freezed.dart
+*.mocks.dart
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Plataformas regenerables con `flutter create --platforms=<p> .` (sin
+# personalización propia). android/ e ios/ NO se ignoran a propósito: tienen
+# configuración nativa irremplazable — android: firma en app/build.gradle.kts,
+# proguard-rules.pro (fix R8/ML Kit), network_security_config, Manifest e íconos;
+# ios: Info.plist con los permisos de cámara (QR) y red local + Bonjour
+# `_nbsound._tcp` (mDNS). Sus artefactos/secretos los cubren android/.gitignore e
+# ios/.gitignore.
+/linux/
+/macos/
+/windows/
+/web/
+
+# Secretos de firma (defensa en profundidad; android/.gitignore ya los cubre).
+# CUSTODIAR fuera del repo: sin la keystore no hay actualizaciones en Play Store.
+android/key.properties
+*.jks
+*.keystore
+
+# SO
+.DS_Store
+
+# Claves: ninguna clave privada entra al repositorio. La clave publica de
+# verificacion de las publicaciones si.
+*.pem
+!docs/architecture/api/clave-de-publicacion.pem
+*.der
+*.p12
+
+# Configuracion de herramientas de agentes (las reglas viven en AGENTS.md).
+.claude/
+.gemini/
+CLAUDE.md
+GEMINI.md
+
+# Artefactos de publicacion y temporales.
+/dist/
+/publicacion/
+*.log

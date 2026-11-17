@@ -1,0 +1,521 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../../core/di/providers.dart';
+import '../../../../core/search/fuzzy.dart';
+import '../../../../data/db/daos/local_playlists_dao.dart';
+import '../../../../data/db/database.dart';
+import '../../../../shared/theme/nb_colors.dart';
+import '../../../../shared/theme/nb_theme.dart';
+import '../../../../shared/widgets/app_icons.dart';
+import '../../../../shared/widgets/aviso.dart';
+import '../../../../shared/widgets/cover.dart';
+import '../../../offline/application/image_resolver.dart';
+import '../../application/library_providers.dart';
+import '../../application/search_providers.dart';
+import '../../../../core/i18n/i18n.dart';
+
+/// Diálogo para crear/renombrar una playlist local. Devuelve el nombre, o null
+/// si se cancela. [inicial] precarga el campo (renombrar).
+Future<String?> pedirNombrePlaylist(
+  BuildContext context, {
+  String? titulo,
+  String inicial = '',
+}) {
+  final String tituloVisible = titulo ?? tr('Nueva playlist');
+  final TextEditingController ctrl = TextEditingController(text: inicial);
+  final NbColors c = context.nb;
+  return showDialog<String>(
+    context: context,
+    builder: (BuildContext dialogContext) {
+      return AlertDialog(
+        backgroundColor: c.bg2,
+        title: Text(
+          tituloVisible,
+          style: TextStyle(
+            fontFamily: NbFonts.display,
+            fontWeight: FontWeight.w800,
+            color: c.text,
+          ),
+        ),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          textCapitalization: TextCapitalization.sentences,
+          style: TextStyle(color: c.text, fontFamily: NbFonts.ui),
+          decoration: InputDecoration(
+            hintText: tr('Nombre'),
+            hintStyle: TextStyle(color: c.text3),
+            enabledBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: c.line2),
+            ),
+            focusedBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: c.accent),
+            ),
+          ),
+          onSubmitted: (String v) {
+            if (v.trim().isNotEmpty) {
+              Navigator.of(dialogContext).pop(v.trim());
+            }
+          },
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(tr('Cancelar'), style: TextStyle(color: c.text2)),
+          ),
+          // Sin nombre no se puede guardar: el botón se deshabilita en vez de
+          // cerrar sin hacer nada.
+          ValueListenableBuilder<TextEditingValue>(
+            valueListenable: ctrl,
+            builder: (BuildContext _, TextEditingValue v, Widget? _) =>
+                FilledButton(
+                  onPressed: v.text.trim().isEmpty
+                      ? null
+                      : () => Navigator.of(dialogContext).pop(v.text.trim()),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: c.accent,
+                    foregroundColor: c.ink,
+                    disabledBackgroundColor: c.bg3,
+                    disabledForegroundColor: c.text3,
+                  ),
+                  child: Text(tr('Guardar')),
+                ),
+          ),
+        ],
+      );
+    },
+    // Libera el controller al cerrarse el diálogo (evita la fuga).
+  ).whenComplete(ctrl.dispose);
+}
+
+/// Diálogo para editar nombre + descripción de una playlist local. Devuelve el
+/// par (nombre, descripción) o null si se cancela.
+Future<({String nombre, String descripcion})?> editarDetallesPlaylist(
+  BuildContext context, {
+  required String nombreInicial,
+  String descripcionInicial = '',
+}) {
+  final TextEditingController nombreCtrl = TextEditingController(
+    text: nombreInicial,
+  );
+  final TextEditingController descCtrl = TextEditingController(
+    text: descripcionInicial,
+  );
+  final NbColors c = context.nb;
+  InputDecoration deco(String hint) => InputDecoration(
+    hintText: hint,
+    hintStyle: TextStyle(color: c.text3),
+    enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: c.line2)),
+    focusedBorder: UnderlineInputBorder(
+      borderSide: BorderSide(color: c.accent),
+    ),
+  );
+  return showDialog<({String nombre, String descripcion})>(
+    context: context,
+    builder: (BuildContext dialogContext) {
+      return AlertDialog(
+        backgroundColor: c.bg2,
+        title: Text(
+          tr('Editar detalles'),
+          style: TextStyle(
+            fontFamily: NbFonts.display,
+            fontWeight: FontWeight.w800,
+            color: c.text,
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            TextField(
+              controller: nombreCtrl,
+              autofocus: true,
+              textCapitalization: TextCapitalization.sentences,
+              style: TextStyle(color: c.text, fontFamily: NbFonts.ui),
+              decoration: deco(tr('Nombre')),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: descCtrl,
+              maxLines: 3,
+              minLines: 1,
+              textCapitalization: TextCapitalization.sentences,
+              style: TextStyle(color: c.text, fontFamily: NbFonts.ui),
+              decoration: deco(tr('Descripción (opcional)')),
+            ),
+          ],
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(tr('Cancelar'), style: TextStyle(color: c.text2)),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop((
+              nombre: nombreCtrl.text.trim(),
+              descripcion: descCtrl.text.trim(),
+            )),
+            style: FilledButton.styleFrom(
+              backgroundColor: c.accent,
+              foregroundColor: c.ink,
+            ),
+            child: Text(tr('Guardar')),
+          ),
+        ],
+      );
+    },
+    // Libera ambos controllers al cerrarse el diálogo (evita la fuga).
+  ).whenComplete(() {
+    nombreCtrl.dispose();
+    descCtrl.dispose();
+  });
+}
+
+/// Crea una playlist local preguntando el nombre. Devuelve su id, o null.
+Future<int?> crearPlaylistLocal(BuildContext context, WidgetRef ref) async {
+  final String? nombre = await pedirNombrePlaylist(context);
+  if (nombre == null || nombre.isEmpty) {
+    return null;
+  }
+  return ref.read(localPlaylistsDaoProvider).crear(nombre);
+}
+
+/// Hoja inferior para **añadir canciones** a la playlist local [playlistId]:
+/// buscador difuso + recomendaciones iniciales; cada fila tiene `+` (añadir) o
+/// la marca de verificación (ya está → quitar).
+Future<void> agregarPistasAPlaylist(
+  BuildContext context,
+  WidgetRef ref,
+  int playlistId,
+) {
+  final NbColors c = context.nb;
+  return showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: c.bg2,
+    isScrollControlled: true,
+    showDragHandle: true,
+    useRootNavigator: true,
+    builder: (BuildContext sheetContext) =>
+        _AgregarPistasSheet(playlistId: playlistId),
+  );
+}
+
+class _AgregarPistasSheet extends ConsumerStatefulWidget {
+  const _AgregarPistasSheet({required this.playlistId});
+  final int playlistId;
+
+  @override
+  ConsumerState<_AgregarPistasSheet> createState() =>
+      _AgregarPistasSheetState();
+}
+
+class _AgregarPistasSheetState extends ConsumerState<_AgregarPistasSheet> {
+  final TextEditingController _ctrl = TextEditingController();
+  Timer? _debounce;
+  String _q = '';
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _onChanged(String v) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 90), () {
+      if (mounted) {
+        setState(() => _q = v);
+      }
+    });
+  }
+
+  /// Recomendaciones iniciales (sin búsqueda): lo que el usuario probablemente
+  /// quiera añadir — recientes + favoritas + más escuchadas, sin repetir, y se
+  /// completa con el catálogo. Tope para no saturar.
+  List<Pista> _recomendaciones() {
+    final List<Pista> out = <Pista>[];
+    final Set<int> vistos = <int>{};
+    void agregar(List<Pista> src) {
+      for (final Pista p in src) {
+        if (vistos.add(p.id)) {
+          out.add(p);
+        }
+      }
+    }
+
+    agregar(ref.watch(recientesProvider).value ?? const <Pista>[]);
+    agregar(ref.watch(favoritasProvider).value ?? const <Pista>[]);
+    agregar(ref.watch(masEscuchadasProvider).value ?? const <Pista>[]);
+    agregar(ref.watch(pistasProvider).value ?? const <Pista>[]);
+    return out.length > 60 ? out.sublist(0, 60) : out;
+  }
+
+  List<Pista> _resultados() {
+    final String q = normalizar(_q);
+    if (q.isEmpty) {
+      return _recomendaciones();
+    }
+    final List<PistaBusq> index = ref.watch(pistaIndexProvider);
+    final List<({double s, Pista p})> scored = <({double s, Pista p})>[];
+    for (final PistaBusq item in index) {
+      final double s = item.puntuar(q);
+      if (s >= 0.35) {
+        scored.add((s: s, p: item.pista));
+      }
+    }
+    scored.sort(
+      (({double s, Pista p}) a, ({double s, Pista p}) b) => b.s.compareTo(a.s),
+    );
+    return <Pista>[for (final ({double s, Pista p}) e in scored.take(60)) e.p];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final NbColors c = context.nb;
+    final Set<int> miembros =
+        (ref.watch(pistasDePlaylistLocalProvider(widget.playlistId)).value ??
+                const <Pista>[])
+            .map((Pista p) => p.id)
+            .toSet();
+    final CoverResolver resolver = ref.watch(coverResolverProvider);
+    final List<Pista> pistas = _resultados();
+    final double h = MediaQuery.sizeOf(context).height;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: SizedBox(
+        height: h * 0.82,
+        child: Column(
+          children: <Widget>[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  tr('Añadir canciones'),
+                  style: TextStyle(
+                    fontFamily: NbFonts.display,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: c.text,
+                  ),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: TextField(
+                controller: _ctrl,
+                onChanged: _onChanged,
+                autofocus: false,
+                style: TextStyle(fontFamily: NbFonts.ui, color: c.text),
+                decoration: InputDecoration(
+                  hintText: tr('Buscar canciones'),
+                  hintStyle: TextStyle(color: c.text3, fontFamily: NbFonts.ui),
+                  prefixIcon: Icon(AppIcons.search, color: c.text3, size: 20),
+                  suffixIcon: _q.isEmpty
+                      ? null
+                      : IconButton(
+                          icon: Icon(AppIcons.close, color: c.text3, size: 18),
+                          onPressed: () {
+                            _ctrl.clear();
+                            setState(() => _q = '');
+                          },
+                        ),
+                  filled: true,
+                  fillColor: c.bg3,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none,
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(vertical: 4),
+                ),
+              ),
+            ),
+            Expanded(
+              child: pistas.isEmpty
+                  ? Center(
+                      child: Text(
+                        tr('Sin resultados'),
+                        style: TextStyle(
+                          color: c.text3,
+                          fontFamily: NbFonts.ui,
+                        ),
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      itemCount: pistas.length,
+                      itemBuilder: (BuildContext context, int i) {
+                        final Pista p = pistas[i];
+                        final bool dentro = miembros.contains(p.id);
+                        return ListTile(
+                          leading: Cover(
+                            image: resolver.imageFor(
+                              p.coverPath,
+                              cacheWidth: coverCachePx(context, 44),
+                            ),
+                            size: 44,
+                            radius: 8,
+                            shadow: false,
+                            kind: CoverKind.track,
+                            coverSeed: p.id,
+                          ),
+                          title: Text(
+                            p.titulo,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontFamily: NbFonts.ui,
+                              fontWeight: FontWeight.w600,
+                              color: c.text,
+                            ),
+                          ),
+                          subtitle: Text(
+                            p.artistaNombre,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontFamily: NbFonts.ui,
+                              fontSize: 12.5,
+                              color: c.text3,
+                            ),
+                          ),
+                          trailing: IconButton(
+                            tooltip: dentro ? tr('Quitar') : tr('Añadir'),
+                            onPressed: () {
+                              final LocalPlaylistsDao dao = ref.read(
+                                localPlaylistsDaoProvider,
+                              );
+                              if (dentro) {
+                                dao.quitarPista(widget.playlistId, p.id);
+                              } else {
+                                dao.anadirPista(widget.playlistId, p.id);
+                              }
+                            },
+                            icon: Icon(
+                              dentro ? AppIcons.check : AppIcons.plus,
+                              color: dentro ? c.accent : c.text2,
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Hoja inferior para añadir [pistaId] a una playlist local (o crear una nueva).
+Future<void> anadirAPlaylist(BuildContext context, WidgetRef ref, int pistaId) {
+  final NbColors c = context.nb;
+  return showModalBottomSheet<void>(
+    context: context,
+    backgroundColor: c.bg2,
+    showDragHandle: true,
+    useRootNavigator: true,
+    builder: (BuildContext sheetContext) {
+      return SafeArea(
+        child: Consumer(
+          builder: (BuildContext context, WidgetRef ref, Widget? _) {
+            final List<PlaylistLocal> locales =
+                ref.watch(playlistsLocalesProvider).value ??
+                const <PlaylistLocal>[];
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      tr('Añadir a playlist'),
+                      style: TextStyle(
+                        fontFamily: NbFonts.display,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                        color: c.text,
+                      ),
+                    ),
+                  ),
+                ),
+                ListTile(
+                  leading: Icon(AppIcons.plus, color: c.accent),
+                  title: Text(
+                    tr('Nueva playlist'),
+                    style: TextStyle(
+                      fontFamily: NbFonts.ui,
+                      fontWeight: FontWeight.w600,
+                      color: c.accent,
+                    ),
+                  ),
+                  onTap: () async {
+                    final int? id = await crearPlaylistLocal(sheetContext, ref);
+                    if (id != null) {
+                      await ref
+                          .read(localPlaylistsDaoProvider)
+                          .anadirPista(id, pistaId);
+                    }
+                    if (sheetContext.mounted) {
+                      Navigator.of(sheetContext).pop();
+                    }
+                    if (id != null && context.mounted) {
+                      avisar(context, tr('Añadida a la nueva playlist'));
+                    }
+                  },
+                ),
+                Flexible(
+                  child: ListView(
+                    shrinkWrap: true,
+                    children: <Widget>[
+                      for (final PlaylistLocal pl in locales)
+                        ListTile(
+                          leading: Icon(AppIcons.note, color: c.text2),
+                          title: Text(
+                            pl.nombre,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontFamily: NbFonts.ui,
+                              fontWeight: FontWeight.w600,
+                              color: c.text,
+                            ),
+                          ),
+                          onTap: () async {
+                            final bool nueva = await ref
+                                .read(localPlaylistsDaoProvider)
+                                .anadirPista(pl.id, pistaId);
+                            if (sheetContext.mounted) {
+                              Navigator.of(sheetContext).pop();
+                            }
+                            if (context.mounted) {
+                              avisar(
+                                context,
+                                nueva
+                                    ? tr('Añadida a {nombre}', {
+                                        'nombre': pl.nombre,
+                                      })
+                                    : tr('Ya está en {nombre}', {
+                                        'nombre': pl.nombre,
+                                      }),
+                              );
+                            }
+                          },
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      );
+    },
+  );
+}

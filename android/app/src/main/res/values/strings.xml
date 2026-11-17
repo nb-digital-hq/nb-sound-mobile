@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">NB Sound</string>
+    <string name="widget_compact_label">Reproductor compacto</string>
+    <string name="widget_card_label">Tarjeta de reproducción</string>
+    <string name="widget_quick_label">Accesos rápidos</string>
+    <string name="widget_compact_description">Reproductor compacto con carátula y controles rápidos</string>
+    <string name="widget_card_description">Tarjeta de reproducción con carátula amplia y controles</string>
+    <string name="widget_quick_actions_description">Accesos rápidos a reanudar, favoritas, biblioteca y conectar</string>
+    <string name="widget_nada">Sin reproducción activa</string>
+    <string name="widget_toca_reproducir">Toca para reproducir</string>
+    <string name="widget_te_espera">Tu biblioteca te espera</string>
+    <string name="widget_toca_abrir">Toca para abrir la música</string>
+    <string name="accion_reanudar">Reanudar música</string>
+    <string name="accion_favoritas">Ir a canciones favoritas</string>
+    <string name="accion_biblioteca">Ir a la biblioteca</string>
+    <string name="accion_conectar">Conectar con PC</string>
+    <string name="accion_play_pausa">Reproducir o pausar</string>
+    <string name="accion_siguiente">Siguiente pista</string>
+    <string name="accion_anterior">Pista anterior</string>
+    <string name="desconocido">Desconocido</string>
+</resources>

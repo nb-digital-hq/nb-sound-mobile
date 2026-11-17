@@ -1,0 +1,41 @@
+name: Ediciones
+
+# Edicion de iOS para una publicacion: .ipa sin firma de Apple, sin probar en
+# un dispositivo real. Los APK de Android se firman en local con la clave del
+# proyecto. Ver docs/developer/releases.md
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  FLUTTER_VERSION: "3.47.6"
+
+jobs:
+  ios:
+    name: iOS sin firmar
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - run: flutter pub get
+      - run: dart run build_runner build --delete-conflicting-outputs
+      - run: flutter build ios --release --no-codesign
+      - name: Empaquetar .ipa
+        run: |
+          version=$(grep '^version:' pubspec.yaml | sed -E 's/version: ([0-9.]+).*/\1/')
+          mkdir -p salida/Payload
+          cp -R build/ios/iphoneos/Runner.app salida/Payload/
+          (cd salida && zip -qr "NB-Sound-Mobile-${version}-ios-unsigned.ipa" Payload)
+          echo "IPA=salida/NB-Sound-Mobile-${version}-ios-unsigned.ipa" >> "$GITHUB_ENV"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-unsigned
+          path: ${{ env.IPA }}
+          if-no-files-found: error

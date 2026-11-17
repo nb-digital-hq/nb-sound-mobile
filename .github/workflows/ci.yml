@@ -1,0 +1,106 @@
+name: CI
+
+# Ningún cambio entra en main sin pasar por aquí. Ver docs/developer/ci-cd.md
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  FLUTTER_VERSION: "3.47.6"
+
+jobs:
+  procedencia:
+    name: Procedencia y convenciones
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Declaracion de origen (DCO) y Conventional Commits
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          patron='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore)(\([a-z0-9._/-]+\))?!?: .+'
+          fallo=0
+          for c in $(git rev-list "$BASE".."$HEAD"); do
+            if ! git log -1 --format=%B "$c" | grep -qiE '^Signed-off-by: .+ <.+@.+>'; then
+              echo "::error::El commit $c no lleva Signed-off-by."
+              fallo=1
+            fi
+            asunto=$(git log -1 --format=%s "$c")
+            case "$asunto" in "Merge "*|"Revert "*) continue ;; esac
+            if ! echo "$asunto" | grep -qE "$patron"; then
+              echo "::error::Asunto fuera de convencion en $c: $asunto"
+              fallo=1
+            fi
+          done
+          exit $fallo
+
+  verificacion:
+    name: Verificacion
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - run: flutter pub get
+      - run: dart run build_runner build --delete-conflicting-outputs
+      - name: Formato
+        run: dart format --output=none --set-exit-if-changed lib test tool
+      - name: Analisis
+        run: flutter analyze
+      - name: Pruebas
+        run: flutter test
+      - name: Guardianes
+        run: dart run tool/guardianes/todos.dart
+
+  android:
+    name: Android
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - run: flutter pub get
+      - run: dart run build_runner build --delete-conflicting-outputs
+      # Sin android/key.properties Gradle firma con la clave de depuracion: la
+      # clave de publicacion nunca esta en la CI.
+      - name: APK de publicacion
+        run: flutter build apk --release --split-per-abi
+
+  ios:
+    name: iOS (sin probar en dispositivo)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          cache: true
+      - run: flutter pub get
+      - run: dart run build_runner build --delete-conflicting-outputs
+      - name: Compilacion sin firma
+        run: flutter build ios --release --no-codesign
